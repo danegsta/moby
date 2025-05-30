@@ -134,7 +134,7 @@ func (aSpace *addrSpace) allocatePool(nw netip.Prefix) error {
 // with existing allocations and 'reserved' prefixes.
 //
 // This method is safe for concurrent use.
-func (aSpace *addrSpace) allocatePredefinedPool(reserved []netip.Prefix) (netip.Prefix, error) {
+func (aSpace *addrSpace) allocatePredefinedPool(reserved []netip.Prefix, preferredSize int) (netip.Prefix, error) {
 	aSpace.mu.Lock()
 	defer aSpace.mu.Unlock()
 
@@ -162,6 +162,13 @@ func (aSpace *addrSpace) allocatePredefinedPool(reserved []netip.Prefix) (netip.
 			return netip.Prefix{}, ipamapi.ErrNoMoreSubnets
 		}
 		pdf := aSpace.predefined[pdfID]
+
+		if preferredSize > pdf.Size && netip.PrefixFrom(pdf.Base.Addr(), preferredSize).IsValid() {
+			pdf = &ipamutils.NetworkToSplit{
+				Base: pdf.Base,
+				Size: preferredSize,
+			}
+		}
 
 		if allocated.Overlaps(pdf.Base) {
 			if allocated.Bits() <= pdf.Base.Bits() {
@@ -251,6 +258,13 @@ func (aSpace *addrSpace) allocatePredefinedPool(reserved []netip.Prefix) (netip.
 	if partialOverlap {
 		pdf := aSpace.predefined[pdfID]
 
+		if preferredSize > pdf.Size && netip.PrefixFrom(pdf.Base.Addr(), preferredSize).IsValid() {
+			pdf = &ipamutils.NetworkToSplit{
+				Base: pdf.Base,
+				Size: preferredSize,
+			}
+		}
+
 		if next := netiputil.PrefixAfter(prevAlloc, pdf.Size); pdf.Overlaps(next) {
 			return makeAlloc(next), nil
 		}
@@ -271,6 +285,13 @@ func (aSpace *addrSpace) allocatePredefinedPool(reserved []netip.Prefix) (netip.
 	// Hence, we're sure 'pdfID' has never been subnetted yet.
 	if pdfID < len(aSpace.predefined) {
 		pdf := aSpace.predefined[pdfID]
+
+		if preferredSize > pdf.Size && netip.PrefixFrom(pdf.Base.Addr(), preferredSize).IsValid() {
+			pdf = &ipamutils.NetworkToSplit{
+				Base: pdf.Base,
+				Size: preferredSize,
+			}
+		}
 
 		next := pdf.FirstPrefix()
 		return makeAlloc(next), nil
